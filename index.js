@@ -1,12 +1,23 @@
 require('dotenv').config()
 const express = require('express');
 const cors = require('cors');
+// const http = require('http');
+// const socketIo = require('socket.io');
 const app = express();
 
 const port = process.env.PORT || 4000;
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 
+// Create HTTP server
+//const server = http.createServer(app);
 
+// Initialize Socket.IO with the HTTP server
+// const io = socketIo(server, {
+//   cors: {
+//     origin: "*", // Allow any origin, adjust as needed
+//     methods: ["GET", "POST"]
+//   }
+// });
 
 
 
@@ -119,73 +130,105 @@ async function run() {
 
 // Update a task
 app.put("/tasks/:id", async (req, res) => {
-      const id  = req.params.id;
-       // Exclude _id from the update payload
-  const { _id, ...updatedTask } = req.body;
-
-  updatedTask.timestamp = Date.now(); // Update timestamp
-
-      const result = await tasksCollection.updateOne(
-        { _id: new ObjectId(id) },
-        { $set: updatedTask }
-      );
-
-      if (result.modifiedCount === 1) {
-        res.send({ message: "Task updated successfully", success: true });
-      } else {
-        res.status(404).send({ message: "Task not found", success: false });
+      const id = req.params.id;
+    
+      // Validate the task ID
+      if (!ObjectId.isValid(id)) {
+        return res.status(400).send({ message: "Invalid task ID", success: false });
+      }
+    
+      // Exclude _id from the update payload
+      const { _id, ...updatedTask } = req.body;
+      updatedTask.timestamp = Date.now(); // Update timestamp
+    
+      try {
+        // Update the task in the database
+        const result = await tasksCollection.updateOne(
+          { _id: new ObjectId(id) },
+          { $set: updatedTask }
+        );
+    
+        if (result.modifiedCount === 1) {
+          // Fetch the updated task from the database
+          const updatedDocument = await tasksCollection.findOne({ _id: new ObjectId(id) });
+    
+          // Send the updated task (including _id) back to the client
+          res.send({
+            message: "Task updated successfully",
+            success: true,
+            task: updatedDocument, // Include the full task object with _id
+          });
+        } else {
+          res.status(404).send({ message: "Task not found", success: false });
+        }
+      } catch (err) {
+        console.error("Error updating task:", err);
+        res.status(500).send({ message: "Server error while updating task", success: false });
       }
     });
+
 
   
 
-    // Reorder tasks (update order field)
-app.put('/tasks/reorder', async (req, res) => {
+// Reorder tasks
+app.put("/tasks/reorder", async (req, res) => {
       const { tasks } = req.body;
-    
+
       try {
+        if (!Array.isArray(tasks)) {
+          return res.status(400).json({ message: "Invalid tasks data" });
+        }
+
         for (let i = 0; i < tasks.length; i++) {
+          const taskId = tasks[i]._id;
+          if (!ObjectId.isValid(taskId)) {
+            return res.status(400).json({ message: `Invalid task ID: ${taskId}` });
+          }
+
           await tasksCollection.updateOne(
-            { _id: new require('mongodb').ObjectId(tasks[i]._id) },
-            { $set: { order: i } } // Update order for each task
+            { _id: new ObjectId(taskId) },
+            { $set: { order: i } }
           );
         }
-        res.json({ message: 'Tasks reordered successfully' });
+
+        res.json({ message: "Tasks reordered successfully" });
       } catch (err) {
-        res.status(500).json({ message: err.message });
+        console.error("Error reordering tasks:", err);
+        res.status(500).json({ message: "Server error while reordering tasks" });
       }
     });
 
+    // Update task category
+//     app.put("/tasks1/:id", async (req, res) => {
+//       const id = req.params.id;
+//       const { category } = req.body;
 
-// app.put("/tasks/reorder", async (req, res) => {
-//       const { tasks } = req.body;
-    
+//       if (!ObjectId.isValid(id)) {
+//         return res.status(400).json({ message: "Invalid task ID" });
+//       }
+
 //       try {
-//         if (!Array.isArray(tasks) || tasks.length === 0) {
-//           return res.status(400).json({ message: "Invalid tasks data" });
+//         const result = await tasksCollection.updateOne(
+//           { _id: new ObjectId(id) },
+//           { $set: { category } }
+//         );
+
+//         if (result.modifiedCount === 1) {
+//           res.json({ message: "Task category updated successfully" });
+//         } else {
+//           res.status(404).json({ message: "Task not found" });
 //         }
-    
-//         for (let i = 0; i < tasks.length; i++) {
-//           const taskId = tasks[i]._id;
-          
-//           // Check if taskId is valid
-//           if (!taskId || typeof taskId !== "string" || taskId.length !== 24) {
-//             console.error(`Invalid task ID received: ${taskId}`);
-//             return res.status(400).json({ message: `Invalid task ID: ${taskId}` });
-//           }
-    
-//           await tasksCollection.updateOne(
-//             { _id: new ObjectId(taskId) },
-//             { $set: { order: i } }  // Assign new order
-//           );
-//         }
-    
-//         res.json({ message: "Tasks reordered successfully" });
 //       } catch (err) {
-//         console.error("Error reordering tasks:", err);
-//         res.status(500).json({ message: "Server error while reordering tasks" });
+//         console.error("Error updating task category:", err);
+//         res.status(500).json({ message: "Server error while updating task category" });
 //       }
 //     });
+
+
+
+    
+    
+
 
    
 
@@ -197,6 +240,7 @@ app.delete('/tasks/:id', async (req, res) => {
       const result = await tasksCollection.deleteOne(query);
       console.log(result)
       res.send(result)
+      //io.emit('taskDeleted', { taskId: id });
 
 })
 
@@ -215,6 +259,7 @@ app.delete('/tasks/:id', async (req, res) => {
                   }
             );
             res.send(result);
+            //io.emit('taskCreated', { task: tasks });
       } catch (error) {
             res.status(500).json({ message: "Error adding task", error });
       }
@@ -228,6 +273,8 @@ app.delete('/tasks/:id', async (req, res) => {
   }
 }
 run().catch(console.dir);
+
+
 
 
 app.get('/', (req, res) => {
