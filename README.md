@@ -22,7 +22,7 @@ Check out the live version: [TaskSync Live](https://tasksync-5e233.web.app)
 - **Frontend:** React, React Router, Tailwind CSS
 - **State Management:** React Query
 - **Backend & Authentication:** Firebase, Express.js, MongoDB
-- **UI Enhancements:** react-icon,react-beautiful-dnd, SweetAlert2
+- **UI Enhancements:** react-icon, hello-pangea-dnd, SweetAlert2
 - **Development Tools:** Vite, ESLint, PostCSS
 
 
